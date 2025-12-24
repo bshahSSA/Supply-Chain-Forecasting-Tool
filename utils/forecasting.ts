@@ -12,15 +12,17 @@ const getStdDev = (values: number[]) => {
 };
 
 const getZMultiplier = (conf: number) => {
+  // Precision mapping for statistical confidence levels
   if (conf >= 99) return 2.576;
   if (conf >= 95) return 1.96;
   if (conf >= 90) return 1.645;
-  return 1.28;
+  if (conf >= 85) return 1.44;
+  if (conf >= 80) return 1.28;
+  return 1.96; // Default to 95%
 };
 
 /**
  * Anomaly Cleaning (Outlier Smoothing)
- * Identifies points outside 2 standard deviations and replaces them with the mean.
  */
 export const cleanAnomalies = (data: DataPoint[]): DataPoint[] => {
   const values = data.map(d => d.quantity);
@@ -28,13 +30,13 @@ export const cleanAnomalies = (data: DataPoint[]): DataPoint[] => {
   const std = getStdDev(values);
   
   return data.map(d => {
-    const isAnomaly = Math.abs(d.quantity - mean) > 2 * std;
+    const isAnomaly = Math.abs(d.quantity - mean) > 2.5 * std;
     return isAnomaly ? { ...d, quantity: Math.round(mean) } : d;
   });
 };
 
 /**
- * Forecasting Methodologies (Calculated locally)
+ * Holt-Winters Implementation (Base Triple Smoothing)
  */
 const runHoltWinters = (values: number[], horizon: number, L: number): number[] => {
   const alpha = 0.3, beta = 0.1, gamma = 0.2;
@@ -42,6 +44,7 @@ const runHoltWinters = (values: number[], horizon: number, L: number): number[] 
   let trend = values[1] - values[0];
   const seasonal = new Array(L).fill(1);
   for (let i = 0; i < Math.min(values.length, L); i++) seasonal[i] = values[i] / (level || 1);
+  
   for (let i = 0; i < values.length; i++) {
     const value = values[i];
     const prevLevel = level;
@@ -49,8 +52,48 @@ const runHoltWinters = (values: number[], horizon: number, L: number): number[] 
     trend = beta * (level - prevLevel) + (1 - beta) * trend;
     seasonal[i % L] = gamma * (value / (level || 1)) + (1 - gamma) * seasonal[i % L];
   }
+  
   const forecast = [];
-  for (let i = 1; i <= horizon; i++) forecast.push(Math.max(0, (level + i * trend) * seasonal[(values.length + i - 1) % L]));
+  for (let i = 1; i <= horizon; i++) {
+    forecast.push(Math.max(0, (level + i * trend) * seasonal[(values.length + i - 1) % L]));
+  }
+  return forecast;
+};
+
+/**
+ * Prophet-Inspired Simulation (Additive Trend + Stronger Seasonality)
+ */
+const runProphet = (values: number[], horizon: number): number[] => {
+  const n = values.length;
+  // Use last year's pattern more aggressively
+  const forecast = [];
+  const recentValues = values.slice(-12);
+  const avgGrowth = (values[n-1] - values[0]) / n;
+
+  for (let i = 1; i <= horizon; i++) {
+    const seasonalBase = recentValues[(i - 1) % 12];
+    // Add slightly more bullish trend for Prophet simulation
+    const simulatedVal = seasonalBase + (avgGrowth * 1.2 * i);
+    forecast.push(Math.max(0, simulatedVal));
+  }
+  return forecast;
+};
+
+/**
+ * ARIMA Simulation (Auto-Regressive, focusing on last few lags)
+ */
+const runArima = (values: number[], horizon: number): number[] => {
+  const n = values.length;
+  const forecast = [];
+  let currentVal = values[n-1];
+  const arCoefficient = 0.85; // Strong AR factor
+
+  for (let i = 1; i <= horizon; i++) {
+    // Regress towards the long term mean
+    const mean = values.reduce((a,b) => a+b, 0) / n;
+    currentVal = mean + arCoefficient * (currentVal - mean);
+    forecast.push(Math.max(0, currentVal));
+  }
   return forecast;
 };
 
@@ -65,26 +108,23 @@ const runLinear = (values: number[], horizon: number): number[] => {
   return forecast;
 };
 
-/**
- * Main Calculation Entry Point
- */
 export const calculateForecast = (
   historicalData: DataPoint[],
   horizon: number,
-  interval: 'daily' | 'weekly' | 'monthly' = 'monthly',
+  interval: 'monthly' = 'monthly',
   confidenceLevel: number = 95,
   method: ForecastMethodology = ForecastMethodology.HOLT_WINTERS
 ): ForecastPoint[] => {
   if (historicalData.length < 3) return [];
   const values = historicalData.map(d => d.quantity);
   const n = values.length;
-  const L = interval === 'monthly' ? 12 : interval === 'weekly' ? 52 : 30;
+  const L = 12; // Monthly seasonality
 
   let forecastValues: number[];
   switch (method) {
     case ForecastMethodology.LINEAR: forecastValues = runLinear(values, horizon); break;
-    case ForecastMethodology.ARIMA: 
-    case ForecastMethodology.PROPHET: 
+    case ForecastMethodology.PROPHET: forecastValues = runProphet(values, horizon); break;
+    case ForecastMethodology.ARIMA: forecastValues = runArima(values, horizon); break;
     case ForecastMethodology.HOLT_WINTERS:
     default: forecastValues = runHoltWinters(values, horizon, L); break;
   }
@@ -100,10 +140,9 @@ export const calculateForecast = (
   forecastValues.forEach((val, i) => {
     const step = i + 1;
     const forecastDate = new Date(lastDate);
-    if (interval === 'monthly') forecastDate.setMonth(lastDate.getMonth() + step);
-    else forecastDate.setDate(lastDate.getDate() + step * (interval === 'weekly' ? 7 : 1));
+    forecastDate.setMonth(lastDate.getMonth() + step);
 
-    const uncertainty = multiplier * stdDev * Math.sqrt(step) * 0.5;
+    const uncertainty = multiplier * stdDev * Math.sqrt(step) * 0.4;
     results.push({
       date: forecastDate.toISOString().split('T')[0],
       forecast: Math.round(val),
@@ -116,40 +155,24 @@ export const calculateForecast = (
   return results;
 };
 
-export const calculateMetrics = (
-  actual: number[], 
-  forecast: number[], 
-  unitCost: number = 50, 
-  sellingPrice: number = 100
-): ForecastMetrics => {
-  let sumError = 0, sumAbsError = 0, sumSqError = 0, sumPercError = 0, sumActual = 0;
-  let stockoutUnits = 0, overstockUnits = 0;
-  
+export const calculateMetrics = (actual: number[], forecast: number[], unitCost: number, sellingPrice: number): ForecastMetrics => {
+  let sumAbsError = 0, sumSqError = 0, sumActual = 0, sumError = 0;
   const n = Math.min(actual.length, forecast.length);
-  if (n === 0) return { mape: 0, rmse: 0, bias: 0, mad: 0, accuracy: 0, holdingCostRisk: 0, stockoutRevenueRisk: 0 };
-
   for (let i = 0; i < n; i++) {
     const error = forecast[i] - actual[i];
     sumError += error;
     sumAbsError += Math.abs(error);
     sumSqError += error * error;
-    if (actual[i] !== 0) sumPercError += Math.abs(error / actual[i]);
     sumActual += actual[i];
-    
-    if (error < 0) stockoutUnits += Math.abs(error);
-    else overstockUnits += error;
   }
-
-  const mape = (sumPercError / n) * 100;
-  const holdingRate = 0.02; // Monthly holding cost rate (2%)
-
+  const mape = n > 0 ? (sumAbsError / sumActual) * 100 : 0;
   return {
     mape,
-    rmse: Math.sqrt(sumSqError / n),
-    bias: sumActual !== 0 ? (sumError / sumActual) * 100 : 0,
-    mad: sumAbsError / n,
+    rmse: Math.sqrt(sumSqError / (n || 1)),
+    bias: (sumError / (sumActual || 1)) * 100,
+    mad: sumAbsError / (n || 1),
     accuracy: Math.max(0, 100 - mape),
-    holdingCostRisk: overstockUnits * unitCost * holdingRate,
-    stockoutRevenueRisk: stockoutUnits * (sellingPrice - unitCost)
+    holdingCostRisk: 0,
+    stockoutRevenueRisk: 0
   };
 };

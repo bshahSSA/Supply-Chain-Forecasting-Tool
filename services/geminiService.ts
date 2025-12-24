@@ -80,9 +80,24 @@ export const getMarketTrendAdjustment = async (prompt: string): Promise<MarketAd
       }
     });
 
-    const data = JSON.parse(response.text);
+    // Safely extract JSON content in case search grounding output includes extra text
+    const text = response.text?.trim() || "{}";
+    let data;
+    try {
+      // Find JSON block if model returned extra text despite instruction
+      const jsonStart = text.indexOf('{');
+      const jsonEnd = text.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        data = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+      } else {
+        data = JSON.parse(text);
+      }
+    } catch (e) {
+      console.warn("Grounding JSON parse failed, using defaults", e);
+      data = { multiplier: 1.0, reasoning: "External research data parsing failed." };
+    }
     
-    // Extract grounding sources
+    // Extract grounding sources as required by guidelines
     const sources: { title: string; uri: string }[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -94,12 +109,12 @@ export const getMarketTrendAdjustment = async (prompt: string): Promise<MarketAd
     }
 
     return {
-      multiplier: data.multiplier || 1.0,
-      reasoning: data.reasoning || "No specific trends found.",
-      sources: sources.slice(0, 4) // Limit to top 4 sources
+      multiplier: typeof data.multiplier === 'number' ? data.multiplier : 1.0,
+      reasoning: data.reasoning || "No specific trends identified.",
+      sources: sources.slice(0, 5) // Limit to top 5 sources
     };
   } catch (error) {
-    console.error("Market Trend Error:", error);
-    return { multiplier: 1.0, reasoning: "External research failed to load.", sources: [] };
+    console.error("Market Trend Adjustment Error:", error);
+    return { multiplier: 1.0, reasoning: "External research unavailable.", sources: [] };
   }
 };

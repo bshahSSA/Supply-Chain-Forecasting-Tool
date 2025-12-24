@@ -31,7 +31,7 @@ export interface ForecastPoint {
   safetyStock?: number;
   reorderPoint?: number;
   scenarioForecast?: number;
-  offsetDate?: string; // For Lead-Time Offset view
+  offsetDate?: string;
 }
 
 export interface ForecastMetrics {
@@ -45,8 +45,6 @@ export interface ForecastMetrics {
 }
 
 export enum TimeInterval {
-  DAILY = 'daily',
-  WEEKLY = 'weekly',
   MONTHLY = 'monthly'
 }
 
@@ -54,21 +52,33 @@ export enum ForecastMethodology {
   HOLT_WINTERS = 'Holt-Winters (Triple Exponential)',
   PROPHET = 'Prophet-Inspired (Additive)',
   ARIMA = 'ARIMA (Auto-Regressive)',
-  LINEAR = 'Linear Regression',
-  NAIVE = 'Naive (Seasonal Moving Average)'
+  LINEAR = 'Linear Regression'
+}
+
+export enum AiProvider {
+  GEMINI = 'Gemini 2.5 Flash',
+  OPENAI = 'GPT-4o',
+  CLAUDE = 'Claude 3.5 Sonnet'
+}
+
+export enum AudienceType {
+  PLANT_MANAGER = 'Plant Manager',
+  DEMAND_PLANNER = 'Demand Planner',
+  SALES = 'Sales Representative',
+  EXECUTIVE = 'Executive Leadership'
 }
 
 export interface Scenario {
   id: string;
   name: string;
-  month: number; // 1-12 relative to horizon start
-  multiplier: number; // e.g. 1.2 for +20%
+  month: number;
+  multiplier: number;
 }
 
 export interface FilterState {
   startDate: string;
   endDate: string;
-  skus: string[]; // Changed from sku: string
+  skus: string[];
   category: string;
   confidenceLevel: number;
   methodology: ForecastMethodology;
@@ -77,4 +87,5 @@ export interface FilterState {
   globalServiceLevel: number;
   applyAnomalyCleaning: boolean;
   showLeadTimeOffset: boolean;
+  aiProvider: AiProvider;
 }
