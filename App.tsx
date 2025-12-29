@@ -41,9 +41,6 @@ const METHOD_DESCRIPTIONS: Record<ForecastMethodology, string> = {
   [ForecastMethodology.LINEAR]: "Simple regression fitting a straight line. Ideal for long-term structural drift identification."
 };
 
-/**
- * Custom Tooltip for the Demand Trend Chart
- */
 const CustomTrendTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -86,9 +83,6 @@ const CustomTrendTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-/**
- * Custom Searchable Select Component for Single Selection (Category)
- */
 const SearchableSelect: React.FC<{
   options: string[];
   value: string;
@@ -166,9 +160,6 @@ const SearchableSelect: React.FC<{
   );
 };
 
-/**
- * Custom Multi-Searchable Select Component (SKU)
- */
 const MultiSearchableSelect: React.FC<{
   options: string[];
   selected: string[];
@@ -390,7 +381,6 @@ const App: React.FC = () => {
       raw = raw.map(p => p.isForecast ? { ...p, forecast: Math.round(p.forecast * marketAdj.multiplier) } : p);
     }
     const currentInv = inventory.filter(i => committedSettings.filters.skus.includes(i.sku)).reduce((s, i) => s + i.onHand, 0);
-    // Fix: Redundant 8th argument removed to fix argument count error (got 10, expected max 9).
     return calculateSupplyChainMetrics(
       raw, 
       stats.std, 
@@ -511,10 +501,17 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-slate-950 font-sans text-slate-100 overflow-hidden">
       <aside className="w-full lg:w-80 bg-slate-900 border-r border-slate-800 p-5 flex flex-col gap-4 h-screen overflow-y-auto no-scrollbar z-30 shadow-2xl shrink-0">
-        <div className="mb-1">
-          <svg viewBox="0 0 300 50" className="w-full h-auto text-[#1e40af]" xmlns="http://www.w3.org/2000/svg">
-            <text x="50" y="35" font-family="Montserrat, sans-serif" font-weight="800" font-size="28" fill="currentColor">SSA & COMPANY</text>
-            <path d="M5 5 H15 V15 M5 45 H15 V35 M15 15 L35 35" fill="none" stroke="currentColor" stroke-width="3" />
+        <div className="mb-2">
+          {/* Refined SSA & Company Brand Logo with Serif Font */}
+          <svg viewBox="0 0 350 50" className="w-full h-auto text-[#002855]" xmlns="http://www.w3.org/2000/svg">
+            <g stroke="currentColor" strokeWidth="3.5" fill="none" strokeLinecap="square">
+              {/* The Bracket [ */}
+              <path d="M12 10 H4 V40 H12" /> 
+              {/* The Up-Pointing Arrow ↗ */}
+              <path d="M8 35 L32 11" /> 
+              <path d="M20 11 H32 V23" /> 
+            </g>
+            <text x="48" y="36" fontFamily="'Times New Roman', Times, serif" fontWeight="600" fontSize="26" fill="currentColor" letterSpacing="0.02em">SSA & COMPANY</text>
           </svg>
           <div className="flex items-center gap-2 mt-2 text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">
             <Zap size={10} className="text-indigo-400" /> Advanced Forecasting Engine
@@ -624,7 +621,6 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Enhanced Searchable Filter Console */}
         <section className="bg-slate-900/50 backdrop-blur-md border border-slate-800 p-6 rounded-[2.5rem] grid grid-cols-1 lg:grid-cols-2 gap-8 shadow-2xl animate-in fade-in duration-500 relative z-40">
            <div className="w-full">
               <MultiSearchableSelect 
