@@ -1,5 +1,5 @@
 
-import { ForecastPoint, Scenario } from '../types';
+import { ForecastPoint, Scenario, ProductAttribute } from '../types';
 
 export const getZScore = (serviceLevel: number): number => {
   if (serviceLevel >= 0.999) return 3.09;
@@ -19,16 +19,27 @@ export const calculateSupplyChainMetrics = (
   serviceLevel: number,
   onHand: number,
   scenarios: Scenario[] = [],
-  showOffset: boolean = false
+  showOffset: boolean = false,
+  volatilityMultiplier: number = 0,
+  attributes: ProductAttribute[] = []
 ): ForecastPoint[] => {
   const z = getZScore(serviceLevel);
-  const leadTimePeriods = leadTimeDays / 30;
+  
+  // Adjust lead time based on supplier volatility (resiliency stress test)
+  const adjustedLeadTime = leadTimeDays * (1 + volatilityMultiplier);
+  const leadTimePeriods = adjustedLeadTime / 30;
+  
+  // Safety stock expands as volatility increases
   const safetyStock = Math.round(z * historicalStdDev * Math.sqrt(leadTimePeriods));
   
   const forecastOnly = forecast.filter(f => f.isForecast);
   const forecastAvg = forecastOnly.reduce((sum, f) => sum + f.forecast, 0) / (forecastOnly.length || 1);
   const avgDailyDemand = forecastAvg / 30;
-  const reorderPoint = Math.round((avgDailyDemand * leadTimeDays) + safetyStock);
+  const reorderPoint = Math.round((avgDailyDemand * adjustedLeadTime) + safetyStock);
+
+  // Financial Context
+  const avgPrice = attributes.length > 0 ? attributes.reduce((s, a) => s + a.sellingPrice, 0) / attributes.length : 150;
+  const avgCost = attributes.length > 0 ? attributes.reduce((s, a) => s + a.unitCost, 0) / attributes.length : 100;
 
   let runningInventory = onHand;
   let forecastCounter = 0;
@@ -42,8 +53,6 @@ export const calculateSupplyChainMetrics = (
       runningInventory -= scenarioVal;
     }
 
-    // Lead-Time Offset Logic: Shift the "Projected" date BACK by lead time
-    // This tells the user when they need to place the order
     let offsetDate = p.date;
     if (showOffset && p.isForecast) {
       const d = new Date(p.date);
@@ -53,18 +62,19 @@ export const calculateSupplyChainMetrics = (
 
     return {
       ...p,
-      date: offsetDate, // Mutate date if offset is requested
+      date: offsetDate,
       scenarioForecast: p.isForecast ? scenarioVal : undefined,
       safetyStock,
       reorderPoint,
-      projectedInventory: p.isForecast ? runningInventory : onHand
+      projectedInventory: p.isForecast ? runningInventory : onHand,
+      // Round to nearest dollar
+      projectedRevenue: p.isForecast ? Math.round(scenarioVal * avgPrice) : undefined,
+      projectedMargin: p.isForecast ? Math.round(scenarioVal * (avgPrice - avgCost)) : undefined,
+      inventoryValue: Math.round((p.isForecast ? runningInventory : onHand) * avgCost)
     };
   });
 };
 
-/**
- * Pareto Analysis (ABC Classification)
- */
 export const runParetoAnalysis = (skuData: { sku: string; totalVolume: number }[]) => {
   const sorted = [...skuData].sort((a, b) => b.totalVolume - a.totalVolume);
   const total = sorted.reduce((s, x) => s + x.totalVolume, 0);

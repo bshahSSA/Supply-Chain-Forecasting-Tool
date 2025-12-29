@@ -9,8 +9,9 @@ export const generateSampleData = (): DataPoint[] => {
   const start = new Date('2021-01-01');
   const end = new Date('2024-05-01');
   
-  SKUS.forEach(sku => {
-    const category = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+  SKUS.forEach((sku, idx) => {
+    // Consistent category assignment for sample data
+    const category = CATEGORIES[idx % CATEGORIES.length];
     const baseQuantity = 100 + Math.random() * 500;
     const trend = 0.5 + Math.random() * 1.5;
     
@@ -29,11 +30,11 @@ export const generateSampleData = (): DataPoint[] => {
   return data;
 };
 
-// Fix: Add missing sellingPrice property to satisfy ProductAttribute interface
-export const SAMPLE_ATTRIBUTES: ProductAttribute[] = SKUS.map(sku => {
+export const SAMPLE_ATTRIBUTES: ProductAttribute[] = SKUS.map((sku, idx) => {
   const unitCost = 10 + Math.random() * 200;
   return {
     sku,
+    category: CATEGORIES[idx % CATEGORIES.length],
     leadTimeDays: 15 + Math.floor(Math.random() * 45),
     unitCost,
     sellingPrice: unitCost * 1.5,

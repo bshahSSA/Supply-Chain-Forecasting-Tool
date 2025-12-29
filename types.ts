@@ -8,6 +8,7 @@ export interface DataPoint {
 
 export interface ProductAttribute {
   sku: string;
+  category: string;
   leadTimeDays: number;
   unitCost: number;
   sellingPrice: number;
@@ -32,6 +33,10 @@ export interface ForecastPoint {
   reorderPoint?: number;
   scenarioForecast?: number;
   offsetDate?: string;
+  // Financial metrics
+  projectedRevenue?: number;
+  projectedMargin?: number;
+  inventoryValue?: number;
 }
 
 export interface ForecastMetrics {
@@ -42,6 +47,7 @@ export interface ForecastMetrics {
   accuracy: number;
   holdingCostRisk: number;
   stockoutRevenueRisk: number;
+  totalValueAtRisk?: number;
 }
 
 export enum TimeInterval {
@@ -56,7 +62,7 @@ export enum ForecastMethodology {
 }
 
 export enum AiProvider {
-  GEMINI = 'Gemini 2.5 Flash',
+  GEMINI = 'Gemini 3 Flash',
   OPENAI = 'GPT-4o',
   CLAUDE = 'Claude 3.5 Sonnet'
 }
@@ -88,4 +94,15 @@ export interface FilterState {
   applyAnomalyCleaning: boolean;
   showLeadTimeOffset: boolean;
   aiProvider: AiProvider;
+  // New Resiliency parameters
+  supplierVolatility: number; // 0 to 1
+}
+
+export interface OnePagerData {
+  title: string;
+  executiveSummary: string;
+  kpis: { label: string; value: string; context: string }[];
+  strategicRisks: { risk: string; impact: string }[];
+  recommendations: string[];
+  outlook: string;
 }
